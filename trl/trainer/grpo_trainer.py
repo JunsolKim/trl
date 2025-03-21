@@ -779,12 +779,7 @@ class GRPOTrainer(Trainer):
                     prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config, return_dict_in_generate=True, output_hidden_states=True
                 )
                 prompt_completion_ids = unwrapped_model_generated.sequences
-                generated_hidden_states = []
-                for i in unwrapped_model_generated.hidden_states:
-                    generated_hidden_states_row = []
-                    for j in i:
-                        generated_hidden_states_row.append(j[:, -1, :].detach())
-                    generated_hidden_states.append(generated_hidden_states_row)
+                generated_hidden_states = torch.stack([torch.stack([j[:, -1, :].detach() for j in i], axis=0) for i in unwrapped_model_generated.hidden_states], axis=0)
 
             # Compute prompt length and extract completion ids
             prompt_length = prompt_ids.size(1)
