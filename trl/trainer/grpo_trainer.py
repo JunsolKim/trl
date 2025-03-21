@@ -775,9 +775,16 @@ class GRPOTrainer(Trainer):
         else:
             # Regular generation path
             with unwrap_model_for_generation(self.model_wrapped, self.accelerator) as unwrapped_model:
-                prompt_completion_ids = unwrapped_model.generate(
-                    prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config
+                unwrapped_model_generated = unwrapped_model.generate(
+                    prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config, return_dict_in_generate=True, output_hidden_states=True
                 )
+                prompt_completion_ids = unwrapped_model_generated.sequences
+                generated_hidden_states = []
+                for i in unwrapped_model_generated.hidden_states:
+                    generated_hidden_states_row = []
+                    for j in i:
+                        generated_hidden_states_row.append(j[:, -1, :].detach())
+                    generated_hidden_states.append(generated_hidden_states_row)
 
             # Compute prompt length and extract completion ids
             prompt_length = prompt_ids.size(1)
@@ -855,7 +862,7 @@ class GRPOTrainer(Trainer):
                     # Repeat all input columns (but "prompt" and "completion") to match the number of generations
                     keys = [key for key in inputs[0] if key not in ["prompt", "completion"]]
                     reward_kwargs = {key: [example[key] for example in inputs] for key in keys}
-                    output_reward_func = reward_func(prompts=prompts, completions=completions, **reward_kwargs)
+                    output_reward_func = reward_func(prompts=prompts, completions=completions, output_hidden_states=generated_hidden_states, **reward_kwargs)
                     # Convert None values to NaN
                     output_reward_func = [reward if reward is not None else torch.nan for reward in output_reward_func]
 
