@@ -317,8 +317,8 @@ class GRPOTrainer(Trainer):
         # Reference model
         self.beta = args.beta
         if self.beta == 0.0:
-            # If beta is 0.0, the reference model is not needed
-            self.ref_model = None
+            # If beta is 0.0, the reference model is not needed. Maybe needed for probe-based rewards
+            self.ref_model = create_reference_model(model) #None
         elif is_deepspeed_zero3_enabled():
             self.ref_model = AutoModelForCausalLM.from_pretrained(model_id, **model_init_kwargs)
         elif is_peft_model(model):
@@ -327,7 +327,7 @@ class GRPOTrainer(Trainer):
             self.ref_model = None
         else:
             # If PEFT configuration is not provided, create a reference model based on the initial model.
-            self.ref_model = create_reference_model(model)
+            self.ref_model = create_reference_model(model) #return_dict_in_generate=True, output_hidden_states=True is added here.
 
         # Processing class
         if processing_class is None:
@@ -775,11 +775,16 @@ class GRPOTrainer(Trainer):
         else:
             # Regular generation path
             with unwrap_model_for_generation(self.model_wrapped, self.accelerator) as unwrapped_model:
-                unwrapped_model_generated = unwrapped_model.generate(
-                    prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config, return_dict_in_generate=True, output_hidden_states=True
+                #unwrapped_model_generated = unwrapped_model.generate(
+                #    prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config, return_dict_in_generate=True, output_hidden_states=True
+                #)
+                #prompt_completion_ids = unwrapped_model_generated.sequences
+                prompt_completion_ids = unwrapped_model.generate(
+                    prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config
                 )
-                prompt_completion_ids = unwrapped_model_generated.sequences
-                generated_hidden_states = torch.stack([torch.stack([j[:, -1, :].detach() for j in i], axis=0) for i in unwrapped_model_generated.hidden_states], axis=0)
+                generated_hidden_states = self.ref_model(gened.sequences, output_hidden_states=True).hidden_states
+                generated_hidden_states = torch.stack([torch.stack([j[:, -1, :].detach() for j in i], axis=0) for i in generated_hidden_states], axis=0)
+                #generated_hidden_states = torch.stack([torch.stack([j[:, -1, :].detach() for j in i], axis=0) for i in unwrapped_model_generated.hidden_states], axis=0)
 
             # Compute prompt length and extract completion ids
             prompt_length = prompt_ids.size(1)
