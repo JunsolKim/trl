@@ -782,6 +782,7 @@ class GRPOTrainer(Trainer):
                 prompt_completion_ids = unwrapped_model.generate(
                     prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config
                 )
+                print(prompt_completion_ids.shape)
                 generated_hidden_states = self.ref_model(prompt_completion_ids, output_hidden_states=True).hidden_states
                 #generated_hidden_states = torch.stack([torch.stack([j[:, -1, :].detach() for j in i], axis=0) for i in unwrapped_model_generated.hidden_states], axis=0)
 
